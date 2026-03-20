@@ -1,11 +1,884 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>PakePlus</title>
-    </head>
-    <body>
-        PakePlus
-    </body>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Weather Glass</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        :root {
+            --primary: #54BCBD;
+            --glass-bg: rgba(30, 41, 59, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-hover: rgba(255, 255, 255, 0.12);
+            --text-primary: rgba(255, 255, 255, 0.95);
+            --text-secondary: rgba(255, 255, 255, 0.6);
+            --text-tertiary: rgba(255, 255, 255, 0.4);
+            --shadow: rgba(0, 0, 0, 0.4);
+            --bg-gradient-start: #0f172a;
+            --bg-gradient-end: #1e293b;
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        [data-theme="light"] {
+            --glass-bg: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --glass-hover: rgba(255, 255, 255, 0.95);
+            --text-primary: rgba(15, 23, 42, 0.95);
+            --text-secondary: rgba(51, 65, 85, 0.7);
+            --text-tertiary: rgba(100, 116, 139, 0.5);
+            --shadow: rgba(0, 0, 0, 0.1);
+            --bg-gradient-start: #e0f2fe;
+            --bg-gradient-end: #f0f9ff;
+        }
+
+        body {
+            background: linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding-bottom: calc(80px + var(--safe-bottom));
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 4px 24px 0 var(--shadow);
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.1);
+        }
+
+        .temp-display {
+            background: linear-gradient(135deg, #54BCBD 0%, #3AAFA9 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .weather-icon-large {
+            filter: drop-shadow(0 4px 12px rgba(84, 188, 189, 0.4));
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding-bottom: var(--safe-bottom);
+            z-index: 50;
+            background: linear-gradient(to top, var(--glass-bg) 0%, transparent 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 0;
+            color: var(--text-tertiary);
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .nav-item.active {
+            color: #54BCBD;
+        }
+
+        .nav-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: 8px;
+            width: 20px;
+            height: 3px;
+            background: #54BCBD;
+            border-radius: 2px;
+        }
+
+        .search-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .search-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .search-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .search-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-gradient-start);
+            border-radius: 0 0 24px 24px;
+            max-height: 70vh;
+            overflow: hidden;
+            transform: translateY(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .search-modal.active .search-content {
+            transform: translateY(0);
+        }
+
+        .search-input-mobile {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            transition: all 0.2s;
+        }
+
+        .search-input-mobile:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: #54BCBD;
+            outline: none;
+        }
+
+        [data-theme="light"] .search-input-mobile {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(0,0,0,0.1);
+        }
+
+        .search-result-item {
+            padding: 16px;
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background 0.2s;
+        }
+
+        .search-result-item:active {
+            background: rgba(84, 188, 189, 0.1);
+        }
+
+        .hourly-scroll {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding: 4px;
+        }
+
+        .hourly-scroll::-webkit-scrollbar {
+            display: none;
+        }
+
+        .hourly-item {
+            flex-shrink: 0;
+            scroll-snap-align: start;
+        }
+
+        .chart-container {
+            height: 120px;
+            position: relative;
+        }
+
+        .trend-line {
+            stroke: #54BCBD;
+            stroke-width: 2.5;
+            fill: none;
+            stroke-linecap: round;
+            filter: drop-shadow(0 2px 4px rgba(84, 188, 189, 0.3));
+        }
+
+        .trend-area {
+            fill: url(#gradient);
+            opacity: 0.25;
+        }
+
+        .day-night-bar {
+            height: 3px;
+            background: linear-gradient(90deg, #FDB813 0%, #f97316 50%, #3b82f6 100%);
+            border-radius: 2px;
+            position: relative;
+            margin: 12px 0;
+        }
+
+        .sun-dot {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: #FDB813;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #FDB813;
+            border: 2px solid white;
+        }
+
+        .pull-indicator {
+            width: 36px;
+            height: 4px;
+            background: var(--text-tertiary);
+            border-radius: 2px;
+            margin: 8px auto;
+            opacity: 0.5;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .forecast-day {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .forecast-day:last-child {
+            border-bottom: none;
+        }
+
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-gradient-start);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(84, 188, 189, 0.2);
+            border-top-color: #54BCBD;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .glass-button {
+            background: rgba(84, 188, 189, 0.15);
+            border: 1px solid rgba(84, 188, 189, 0.3);
+            color: #54BCBD;
+            transition: all 0.2s;
+        }
+
+        .glass-button:active {
+            background: rgba(84, 188, 189, 0.3);
+            transform: scale(0.98);
+        }
+    </style>
+<base target="_blank">
+</head>
+<body class="antialiased">
+
+    <!-- 加载画面 -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="spinner mb-4"></div>
+        <p class="text-sm opacity-60">正在定位...</p>
+    </div>
+
+    <!-- 顶部状态栏 -->
+    <header class="sticky top-0 z-40 px-4 pt-12 pb-4 glass-panel border-b-0 rounded-b-3xl">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <button onclick="openSearch()" class="p-2 -ml-2 rounded-full active:bg-white/10 transition-colors">
+                    <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </button>
+                <div>
+                    <h1 id="location-name" class="text-lg font-semibold">北京市</h1>
+                    <p id="current-date" class="text-xs opacity-50">--</p>
+                </div>
+            </div>
+            <button onclick="toggleTheme()" class="p-2 rounded-full glass-button">
+                <svg id="theme-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="px-4 py-6 space-y-4">
+        
+        <!-- 当前天气大卡片 -->
+        <div class="glass-card p-6 text-center relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-[#54BCBD] rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
+            
+            <div class="relative z-10">
+                <div class="flex justify-center mb-2">
+                    <span class="px-3 py-1 rounded-full bg-[#54BCBD]/20 text-[#54BCBD] text-xs font-medium">实时</span>
+                </div>
+                
+                <div id="weather-icon" class="w-24 h-24 mx-auto mb-4 weather-icon-large">
+                    <!-- 动态图标 -->
+                </div>
+                
+                <div class="mb-2">
+                    <span id="temperature" class="text-7xl font-light tracking-tighter temp-display">--</span>
+                    <span class="text-2xl font-light opacity-40 align-top">°</span>
+                </div>
+                
+                <p id="weather-desc" class="text-lg font-medium mb-3 opacity-90">--</p>
+                
+                <div class="flex justify-center gap-6 text-xs opacity-60">
+                    <span>最高 <span id="temp-max" class="font-semibold">--</span>°</span>
+                    <span>最低 <span id="temp-min" class="font-semibold">--</span>°</span>
+                    <span>体感 <span id="feels-like" class="font-semibold">--</span>°</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 日出日落 -->
+        <div class="glass-card p-4">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs opacity-60 flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    日出日落
+                </span>
+                <span id="day-progress" class="text-xs opacity-40">--</span>
+            </div>
+            <div class="day-night-bar">
+                <div class="sun-dot" style="left: 35%;"></div>
+            </div>
+            <div class="flex justify-between text-xs">
+                <div class="text-center">
+                    <p class="opacity-40 mb-1">日出</p>
+                    <p id="sunrise-time" class="font-semibold">--:--</p>
+                </div>
+                <div class="text-center">
+                    <p class="opacity-40 mb-1">日落</p>
+                    <p id="sunset-time" class="font-semibold">--:--</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 小时预报 -->
+        <div>
+            <h3 class="text-sm font-semibold mb-3 opacity-80 px-1">24小时预报</h3>
+            <div id="hourly-forecast" class="hourly-scroll pb-2">
+                <!-- 动态生成 -->
+            </div>
+        </div>
+
+        <!-- 温度趋势迷你图 -->
+        <div class="glass-card p-4">
+            <h3 class="text-xs font-semibold mb-3 opacity-60">温度趋势</h3>
+            <div class="chart-container">
+                <svg id="temp-chart" class="w-full h-full" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#54BCBD;stop-opacity:0.4" />
+                            <stop offset="100%" style="stop-color:#54BCBD;stop-opacity:0" />
+                        </linearGradient>
+                    </defs>
+                    <path id="chart-area" class="trend-area" d=""/>
+                    <path id="chart-line" class="trend-line" d=""/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 详细指标 -->
+        <div class="metric-grid">
+            <div class="glass-card p-4 flex flex-col items-center text-center">
+                <div class="w-10 h-10 rounded-full bg-[#54BCBD]/20 flex items-center justify-center text-[#54BCBD] mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                    </svg>
+                </div>
+                <p class="text-xs opacity-50 mb-1">湿度</p>
+                <p id="humidity" class="text-xl font-bold">--%</p>
+            </div>
+
+            <div class="glass-card p-4 flex flex-col items-center text-center">
+                <div class="w-10 h-10 rounded-full bg-[#54BCBD]/20 flex items-center justify-center text-[#54BCBD] mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <p class="text-xs opacity-50 mb-1">风速</p>
+                <p id="wind-speed" class="text-xl font-bold">--</p>
+            </div>
+
+            <div class="glass-card p-4 flex flex-col items-center text-center">
+                <div class="w-10 h-10 rounded-full bg-[#54BCBD]/20 flex items-center justify-center text-[#54BCBD] mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <p class="text-xs opacity-50 mb-1">气压</p>
+                <p id="pressure" class="text-xl font-bold">--</p>
+            </div>
+
+            <div class="glass-card p-4 flex flex-col items-center text-center">
+                <div class="w-10 h-10 rounded-full bg-[#54BCBD]/20 flex items-center justify-center text-[#54BCBD] mb-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                </div>
+                <p class="text-xs opacity-50 mb-1">能见度</p>
+                <p id="visibility" class="text-xl font-bold">--</p>
+            </div>
+        </div>
+
+        <!-- 7天预报列表 -->
+        <div class="glass-card p-4">
+            <h3 class="text-sm font-semibold mb-3 opacity-80">7天预报</h3>
+            <div id="daily-forecast" class="space-y-0">
+                <!-- 动态生成 -->
+            </div>
+        </div>
+
+        <!-- 底部留白 -->
+        <div class="h-8"></div>
+    </main>
+
+    <!-- 搜索模态框 -->
+    <div id="search-modal" class="search-modal">
+        <div class="search-backdrop" onclick="closeSearch()"></div>
+        <div class="search-content glass-panel">
+            <div class="pull-indicator"></div>
+            <div class="p-4 pb-2">
+                <div class="relative">
+                    <input type="text" id="search-input" placeholder="搜索城市..." 
+                           class="w-full search-input-mobile rounded-xl pl-10 pr-10 py-3 text-base"
+                           oninput="handleSearch(this.value)">
+                    <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <button onclick="clearSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full opacity-40">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="px-4 pb-4">
+                <button onclick="getCurrentLocation()" class="w-full glass-button rounded-xl p-3 flex items-center justify-center gap-2 text-sm font-medium mb-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                    定位到当前位置
+                </button>
+            </div>
+            <div id="search-results" class="overflow-y-auto max-h-[50vh]">
+                <!-- 搜索结果 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部导航栏 - 已移除设置按钮 -->
+    <nav class="bottom-nav px-6 pb-2 pt-2">
+        <div class="glass-card flex items-center justify-around py-1">
+            <button class="nav-item active" onclick="scrollToTop()">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                <span class="text-[10px]">天气</span>
+            </button>
+            <button class="nav-item" onclick="openSearch()">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <span class="text-[10px]">搜索</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        // 天气代码映射
+        const weatherCodes = {
+            0: { desc: '晴朗', icon: 'sun' },
+            1: { desc: '多云', icon: 'sun-cloud' },
+            2: { desc: '阴天', icon: 'cloud' },
+            3: { desc: '阴天', icon: 'cloud' },
+            45: { desc: '雾', icon: 'fog' },
+            48: { desc: '雾', icon: 'fog' },
+            51: { desc: '小雨', icon: 'drizzle' },
+            53: { desc: '小雨', icon: 'drizzle' },
+            55: { desc: '中雨', icon: 'drizzle' },
+            61: { desc: '中雨', icon: 'rain' },
+            63: { desc: '大雨', icon: 'rain' },
+            65: { desc: '暴雨', icon: 'rain' },
+            71: { desc: '小雪', icon: 'snow' },
+            73: { desc: '中雪', icon: 'snow' },
+            75: { desc: '大雪', icon: 'snow' },
+            95: { desc: '雷雨', icon: 'thunder' },
+            96: { desc: '雷阵雨', icon: 'thunder' },
+            99: { desc: '雷暴', icon: 'thunder' }
+        };
+
+        const icons = {
+            sun: `<svg class="w-full h-full text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,
+            'sun-cloud': `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" class="text-yellow-400" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 16a3 3 0 01-3 3H8a3 3 0 01-3-3 3 3 0 013-3 4 4 0 017.5-1.5A3 3 0 0119 16z" class="text-gray-300"/></svg>`,
+            cloud: `<svg class="w-full h-full text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/></svg>`,
+            rain: `<svg class="w-full h-full text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 16.2A4.5 4.5 0 0017.5 8h-1.832A4.5 4.5 0 009.5 8H7.5a4.5 4.5 0 00-4.5 4.5c0 2.3 1.5 4.2 3.5 4.8M12 18v2m-4-2v2m8-2v2"/></svg>`,
+            snow: `<svg class="w-full h-full text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>`,
+            thunder: `<svg class="w-full h-full text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>`,
+            fog: `<svg class="w-full h-full text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15h18M3 12h18M3 9h18"/></svg>`,
+            drizzle: `<svg class="w-full h-full text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 16.2A4.5 4.5 0 0017.5 8h-1.832A4.5 4.5 0 009.5 8H7.5a4.5 4.5 0 00-4.5 4.5c0 2.3 1.5 4.2 3.5 4.8M12 18v2m-4-2v2m8-2v2"/></svg>`
+        };
+
+        let currentLat = 39.9042;
+        let currentLon = 116.4074;
+        let currentCity = '北京市';
+        let searchTimeout = null;
+
+        // 主题切换
+        function detectTheme() {
+            const hour = new Date().getHours();
+            const isDark = hour < 6 || hour >= 18;
+            if (isDark) {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+            updateThemeIcon();
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            if (current === 'light') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            const icon = document.getElementById('theme-icon');
+            if (isLight) {
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>';
+            } else {
+                icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>';
+            }
+        }
+
+        // 搜索功能
+        function openSearch() {
+            document.getElementById('search-modal').classList.add('active');
+            setTimeout(() => {
+                document.getElementById('search-input').focus();
+            }, 100);
+        }
+
+        function closeSearch() {
+            document.getElementById('search-modal').classList.remove('active');
+        }
+
+        function clearSearch() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('search-results').innerHTML = '';
+        }
+
+        function handleSearch(value) {
+            clearTimeout(searchTimeout);
+            if (value.length < 2) {
+                document.getElementById('search-results').innerHTML = '';
+                return;
+            }
+            searchTimeout = setTimeout(() => {
+                performSearch(value);
+            }, 300);
+        }
+
+        async function performSearch(query) {
+            try {
+                const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=6&language=zh&format=json`);
+                const data = await response.json();
+                
+                const container = document.getElementById('search-results');
+                if (data.results && data.results.length > 0) {
+                    container.innerHTML = data.results.map(r => {
+                        const location = [r.admin1, r.country].filter(Boolean).join(', ');
+                        return `
+                            <div class="search-result-item" onclick="selectCity(${r.latitude}, ${r.longitude}, '${r.name.replace(/'/g, "\\'")}')">
+                                <div class="w-10 h-10 rounded-full bg-[#54BCBD]/20 flex items-center justify-center text-[#54BCBD] flex-shrink-0">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                    </svg>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-medium text-sm truncate">${r.name}</p>
+                                    <p class="text-xs opacity-50 truncate">${location}</p>
+                                </div>
+                                <svg class="w-5 h-5 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    container.innerHTML = '<div class="p-8 text-center text-sm opacity-50">未找到相关城市</div>';
+                }
+            } catch (e) {
+                console.error('搜索失败', e);
+            }
+        }
+
+        function selectCity(lat, lon, name) {
+            currentLat = lat;
+            currentLon = lon;
+            currentCity = name;
+            document.getElementById('location-name').textContent = name;
+            closeSearch();
+            clearSearch();
+            fetchWeather();
+        }
+
+        // 定位
+        function getCurrentLocation() {
+            if (navigator.geolocation) {
+                document.getElementById('loading-screen').classList.remove('hidden');
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentLat = position.coords.latitude;
+                        currentLon = position.coords.longitude;
+                        fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${currentLat}&longitude=${currentLon}&localityLanguage=zh`)
+                            .then(r => r.json())
+                            .then(data => {
+                                currentCity = data.city || data.locality || '当前位置';
+                                document.getElementById('location-name').textContent = currentCity;
+                                fetchWeather();
+                            })
+                            .catch(() => {
+                                document.getElementById('location-name').textContent = '当前位置';
+                                fetchWeather();
+                            });
+                    },
+                    (err) => {
+                        alert('无法获取位置，请检查定位权限');
+                        document.getElementById('loading-screen').classList.add('hidden');
+                    }
+                );
+            } else {
+                alert('浏览器不支持定位');
+            }
+        }
+
+        // 获取天气
+        async function fetchWeather() {
+            document.getElementById('loading-screen').classList.remove('hidden');
+            
+            try {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${currentLat}&longitude=${currentLon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,surface_pressure,visibility&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                updateUI(data);
+            } catch (e) {
+                console.error('获取天气失败', e);
+                alert('获取天气失败，请稍后重试');
+            } finally {
+                setTimeout(() => {
+                    document.getElementById('loading-screen').classList.add('hidden');
+                }, 500);
+            }
+        }
+
+        function updateUI(data) {
+            const current = data.current;
+            const daily = data.daily;
+            const hourly = data.hourly;
+            const now = new Date();
+            
+            // 基本信息
+            document.getElementById('current-date').textContent = now.toLocaleDateString('zh-CN', {month: 'long', day: 'numeric', weekday: 'short'});
+            
+            const weather = weatherCodes[current.weather_code] || weatherCodes[0];
+            document.getElementById('temperature').textContent = Math.round(current.temperature_2m);
+            document.getElementById('weather-desc').textContent = weather.desc;
+            document.getElementById('weather-icon').innerHTML = icons[weather.icon] || icons.sun;
+            document.getElementById('temp-max').textContent = Math.round(daily.temperature_2m_max[0]);
+            document.getElementById('temp-min').textContent = Math.round(daily.temperature_2m_min[0]);
+            document.getElementById('feels-like').textContent = Math.round(current.apparent_temperature);
+            
+            // 日出日落
+            const sunrise = new Date(daily.sunrise[0]);
+            const sunset = new Date(daily.sunset[0]);
+            document.getElementById('sunrise-time').textContent = sunrise.toLocaleTimeString('zh-CN', {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('sunset-time').textContent = sunset.toLocaleTimeString('zh-CN', {hour: '2-digit', minute:'2-digit'});
+            
+            const totalMinutes = (sunset - sunrise) / 60000;
+            const currentMinutes = (now - sunrise) / 60000;
+            const percent = Math.max(0, Math.min(100, (currentMinutes / totalMinutes) * 100));
+            document.querySelector('.sun-dot').style.left = percent + '%';
+            document.getElementById('day-progress').textContent = percent < 0 ? '夜间' : percent > 100 ? '夜间' : `白天 ${Math.round(percent)}%`;
+            
+            // 详细数据
+            document.getElementById('humidity').textContent = current.relative_humidity_2m + '%';
+            document.getElementById('wind-speed').textContent = current.wind_speed_10m;
+            document.getElementById('pressure').textContent = current.surface_pressure;
+            document.getElementById('visibility').textContent = (current.visibility / 1000).toFixed(1) + 'km';
+            
+            // 小时预报
+            const hourlyContainer = document.getElementById('hourly-forecast');
+            hourlyContainer.innerHTML = '';
+            const currentHour = now.getHours();
+            
+            for (let i = currentHour; i < currentHour + 24; i += 2) {
+                if (i >= hourly.time.length) break;
+                const time = new Date(hourly.time[i]);
+                const hour = time.getHours();
+                const code = hourly.weather_code[i];
+                const info = weatherCodes[code] || weatherCodes[0];
+                
+                const div = document.createElement('div');
+                div.className = 'hourly-item glass-card p-3 flex flex-col items-center min-w-[72px]';
+                div.innerHTML = `
+                    <p class="text-xs opacity-60 mb-2">${hour}:00</p>
+                    <div class="w-8 h-8 mb-2">${icons[info.icon]}</div>
+                    <p class="text-sm font-semibold">${Math.round(hourly.temperature_2m[i])}°</p>
+                `;
+                hourlyContainer.appendChild(div);
+            }
+            
+            // 温度趋势图
+            drawChart(hourly);
+            
+            // 7天预报
+            const dailyContainer = document.getElementById('daily-forecast');
+            dailyContainer.innerHTML = '';
+            
+            for (let i = 0; i < 7; i++) {
+                const date = new Date(daily.time[i]);
+                const dayName = i === 0 ? '今天' : ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][date.getDay()];
+                const code = daily.weather_code[i];
+                const info = weatherCodes[code] || weatherCodes[0];
+                
+                const div = document.createElement('div');
+                div.className = 'forecast-day fade-in';
+                div.style.animationDelay = `${i * 0.05}s`;
+                div.innerHTML = `
+                    <div class="flex items-center gap-3 flex-1">
+                        <span class="text-sm w-10 font-medium">${dayName}</span>
+                        <div class="w-6 h-6">${icons[info.icon]}</div>
+                        <span class="text-xs opacity-70">${info.desc}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm font-bold">${Math.round(daily.temperature_2m_max[i])}°</span>
+                        <span class="text-sm opacity-40">${Math.round(daily.temperature_2m_min[i])}°</span>
+                    </div>
+                `;
+                dailyContainer.appendChild(div);
+            }
+        }
+
+        function drawChart(hourly) {
+            const currentHour = new Date().getHours();
+            const temps = [];
+            
+            for (let i = currentHour; i < currentHour + 24; i += 3) {
+                if (i >= hourly.time.length) break;
+                temps.push(hourly.temperature_2m[i]);
+            }
+            
+            if (temps.length < 2) return;
+            
+            const max = Math.max(...temps) + 2;
+            const min = Math.min(...temps) - 2;
+            const range = max - min;
+            const width = 300;
+            const height = 120;
+            const padding = 10;
+            
+            const points = temps.map((t, i) => {
+                const x = (i / (temps.length - 1)) * (width - padding * 2) + padding;
+                const y = height - ((t - min) / range) * (height - padding * 2) - padding;
+                return `${x},${y}`;
+            });
+            
+            document.getElementById('chart-line').setAttribute('d', `M ${points.join(' L ')}`);
+            document.getElementById('chart-area').setAttribute('d', `M ${points.join(' L ')} L ${width-padding},${height} L ${padding},${height} Z`);
+        }
+
+        function scrollToTop() {
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
+
+        // 初始化
+        detectTheme();
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    currentLat = pos.coords.latitude;
+                    currentLon = pos.coords.longitude;
+                    fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${currentLat}&longitude=${currentLon}&localityLanguage=zh`)
+                        .then(r => r.json())
+                        .then(data => {
+                            currentCity = data.city || data.locality || '当前位置';
+                            document.getElementById('location-name').textContent = currentCity;
+                            fetchWeather();
+                        })
+                        .catch(() => fetchWeather());
+                },
+                () => fetchWeather()
+            );
+        } else {
+            fetchWeather();
+        }
+
+        setInterval(detectTheme, 3600000);
+        setInterval(fetchWeather, 600000);
+    </script>
+</body>
 </html>
